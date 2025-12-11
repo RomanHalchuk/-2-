@@ -1,19 +1,42 @@
 import random
 
 
+def get_int(prompt):
+    """Надійне зчитування цілого числа."""
+    while True:
+        value = input(prompt)
+        if value.isdigit():
+            return int(value)
+        else:
+            print("Please enter a valid integer.")
+
+
+def get_float(prompt):
+    """Надійне зчитування числа з плаваючою крапкою."""
+    while True:
+        value = input(prompt)
+        try:
+            return float(value)
+        except ValueError:
+            print("Please enter a valid number.")
+
+
 def get_friends():
     """Зчитування кількості друзів та їхніх імен."""
-    num_friends = int(input("Enter the number of friends joining (including you):\n> "))
+    num_friends = get_int("Enter the number of friends joining (including you):\n> ")
+
     if num_friends <= 0:
         print("No one is joining for the party")
         return {}, 0
-    else:
-        print("Enter the name of every friend (including you), each on a new line:")
-        friends = {}
-        for _ in range(num_friends):
-            name = input()
-            friends[name] = 0
-        return friends, num_friends
+
+    print("Enter the name of every friend (including you), each on a new line:")
+    friends = {}
+
+    for _ in range(num_friends):
+        name = input("> ").strip()
+        friends[name] = 0
+
+    return friends, num_friends
 
 
 def split_bill(friends, num_friends, total_amount):
@@ -32,6 +55,7 @@ def apply_lucky_feature(friends, total_amount, num_friends):
         lucky_one = random.choice(list(friends.keys()))
         print(f"{lucky_one} is the lucky one!")
         split_amount = round(total_amount / (num_friends - 1), 2)
+
         for friend in friends:
             friends[friend] = 0 if friend == lucky_one else split_amount
     else:
@@ -45,12 +69,13 @@ def main():
     if not friends:
         return
 
-    total_amount = float(input("Enter the total amount:\n> "))
+    total_amount = get_float("Enter the total amount:\n> ")
+
     friends = split_bill(friends, num_friends, total_amount)
     friends = apply_lucky_feature(friends, total_amount, num_friends)
 
     print(friends)
 
 
-if __name__ == "__main__":
+if name == "main":
     main()
