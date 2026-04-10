@@ -1,129 +1,112 @@
-class SimplifiedMarkdownEditor:
+class TextMarkupProcessor:
     def __init__(self):
-        self.result = ""
-        self.formatters = {
-            "plain",
-            "bold",
-            "italic",
-            "header",
-            "link",
-            "inline-code",
-            "ordered-list",
-            "unordered-list",
-            "new-line"
+        self.buffer = ""
+        # Разделил опции на логические группы
+        self.valid_styles = {
+            "plain", "bold", "italic", "header", "link",
+            "inline-code", "ordered-list", "unordered-list", "new-line"
         }
-        self.special_commands = {"!help", "!done", "exit"}
+        self.system_actions = {"!help", "!done", "exit"}
 
-    def print_help(self):
-        print("Available formatters: plain bold italic header link inline-code "
-              "ordered-list unordered-list new-line")
-        print("Special commands: !help !done")
+    def show_instructions(self):
+        print("Доступные инструменты разметки: " + ", ".join(self.valid_styles))
+        print("Системные вызовы: !help (помощь), !done (сохранить и выйти)")
 
-    def get_rows(self):
+    def _ask_for_count(self):
         while True:
             try:
-                rows = int(input("Number of rows: > "))
-                if rows <= 0:
-                    print("The number of rows should be greater than zero")
-                else:
-                    return rows
+                val = int(input("Укажите количество строк: > "))
+                if val > 0:
+                    return val
+                print("Ошибка: значение должно быть положительным числом.")
             except ValueError:
-                print("The number of rows should be greater than zero")
+                print("Ошибка: введите корректное целое число.")
 
-    def run(self):
-        print("Hi User! This is Simplified Markdown_Editor.\n"
-             "Formatter: plain, bold, italic ,header, link, inline-code, ordered-list, unordered-list, new-line.\n"
-              "Special commands: !help, !done, exit.")
+    def execute(self):
+        print("Запущен процессор Markdown-разметки.")
+        print("Для вывода списка команд введите !help. Для выхода без сохранения — exit.")
+
         while True:
-            formatter = input("Choose a formatter:\n> ")
+            cmd = input("Выберите тип разметки или команду:\n> ").strip().lower()
 
-            if formatter in self.special_commands:
-                if formatter == "!help":
-                    self.print_help()
-                elif formatter == "!done":
-                    with open("output.md", "w", encoding="utf-8") as f:
-                        f.write(self.result)
-                    print("Markdown saved to output.md. Exiting.")
+            if cmd in self.system_actions:
+                if cmd == "!help":
+                    self.show_instructions()
+                elif cmd == "!done":
+                    with open("output.md", "w", encoding="utf-8") as file_out:
+                        file_out.write(self.buffer)
+                    print("Данные успешно экспортированы в output.md. Завершение.")
                     break
-                elif formatter == "exit":
-                    print("Exiting without saving.")
+                elif cmd == "exit":
+                    print("Выход выполнен без сохранения изменений.")
                     break
                 continue
 
-            if formatter not in self.formatters:
-                print("Unknown formatting type or command")
+            if cmd not in self.valid_styles:
+                print("Ошибка: неизвестный тип форматирования или команда.")
                 continue
 
-            if formatter == "plain":
-                text = input("Text: > ")
-                self.result += text
+            # Обработка текстовых блоков
+            if cmd == "plain":
+                content = input("Введите текст: > ")
+                self.buffer += content
 
-            elif formatter == "bold":
-                text = input("Text: > ")
-                self.result += f"**{text}**"
+            elif cmd == "bold":
+                content = input("Текст для жирного шрифта: > ")
+                self.buffer += f"**{content}**"
 
-            elif formatter == "italic":
-                text = input("Text: > ")
-                self.result += f"*{text}*"
+            elif cmd == "italic":
+                content = input("Текст для курсива: > ")
+                self.buffer += f"*{content}*"
 
-            elif formatter == "inline-code":
-                text = input("Text: > ")
-                self.result += f"`{text}`"
+            elif cmd == "inline-code":
+                content = input("Код: > ")
+                self.buffer += f"`{content}`"
 
-            elif formatter == "header":
+            elif cmd == "header":
                 while True:
                     try:
-                        level = int(input("Level: > "))
-                        if 1 <= level <= 6:
+                        lvl = int(input("Уровень заголовка (1-6): > "))
+                        if 1 <= lvl <= 6:
                             break
-                        else:
-                            print("The level should be within the range of 1 to 6")
+                        print("Уровень должен быть в диапазоне от 1 до 6.")
                     except ValueError:
-                        print("The level should be within the range of 1 to 6")
-                text = input("Text: > ")
-                self.result += f"{'#' * level} {text}\n"
+                        print("Введите число от 1 до 6.")
+                content = input("Текст заголовка: > ")
+                self.buffer += f"{'#' * lvl} {content}\n"
 
-            elif formatter == "link":
-                label = input("Label: > ")
-                url = input("URL: > ")
-                self.result += f"[{label}]({url})"
+            elif cmd == "link":
+                anchor = input("Текст ссылки (Label): > ")
+                href = input("URL адрес: > ")
+                self.buffer += f"[{anchor}]({href})"
 
-
-            elif formatter == "new-line":
-                if self.result.endswith("\n\n"):
+            elif cmd == "new-line":
+                if self.buffer.endswith("\n\n"):
                     pass
-                elif self.result.endswith("\n"):
-                    self.result += "\n"
+                elif self.buffer.endswith("\n"):
+                    self.buffer += "\n"
                 else:
-                    self.result += "\n\n"
+                    self.buffer += "\n\n"
 
-            elif formatter == "ordered-list":
-                rows = self.get_rows()
-                if self.result and not self.result.endswith("\n"):
-                    self.result += "\n"
+            elif cmd in ("ordered-list", "unordered-list"):
+                num_rows = self._ask_for_count()
+                if self.buffer and not self.buffer.endswith("\n"):
+                    self.buffer += "\n"
 
-                for i in range(1, rows + 1):
-                    row = input(f"Row #{i}: > ")
-                    self.result += f"{i}. {row}\n"
-                self.result += "\n"
+                for i in range(1, num_rows + 1):
+                    line_data = input(f"Элемент списка #{i}: > ")
+                    if cmd == "ordered-list":
+                        self.buffer += f"{i}. {line_data}\n"
+                    else:
+                        self.buffer += f"* {line_data}\n"
+                self.buffer += "\n"
 
-            elif formatter == "unordered-list":
-
-                rows = self.get_rows()
-
-                if self.result and not self.result.endswith("\n"):
-                    self.result += "\n"
-
-                for i in range(1, rows + 1):
-                    row = input(f"Row #{i}: > ")
-
-                    self.result += f"* {row}\n"
-
-                self.result += "\n"
-
-            print(self.result)
+            # Вывод текущего состояния документа
+            print("--- Текущий результат ---")
+            print(self.buffer)
+            print("-------------------------")
 
 
 if __name__ == "__main__":
-    editor = SimplifiedMarkdownEditor()
-    editor.run()
+    processor = TextMarkupProcessor()
+    processor.execute()
