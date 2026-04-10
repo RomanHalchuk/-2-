@@ -1,107 +1,112 @@
 import math
 import argparse
+import sys
 
 
-class CreditCalculator:
-    def __init__(self, args):
-        self.type = args.type
-        self.principal = args.principal
-        self.payment = args.payment
-        self.periods = args.periods
-        self.interest = args.interest
+class FinanceProcessor:
+    def __init__(self, config):
+        self.mode = config.type
+        self.loan_sum = config.principal
+        self.monthly_pay = config.payment
+        self.duration = config.periods
+        self.rate = config.interest
 
-        if self.interest is None or self.interest <= 0:
-            print("Incorrect parameters")
-            exit()
+        # Проверка базовой валидности процентной ставки
+        if self.rate is None or self.rate <= 0:
+            print("Ошибка: параметры указаны неверно.")
+            sys.exit()
 
-        self.i = self.interest / (12 * 100)
+        # Расчет месячного коэффициента
+        self.base_rate = self.rate / (12 * 100)
 
-    def calc_annuity_payment(self):
-        a = self.principal * (self.i * (1 + self.i) ** self.periods) / (
-            (1 + self.i) ** self.periods - 1
-        )
-        a = math.ceil(a)
-        print(f"Your annuity payment = {a}!")
-        print(f"Overpayment = {int(a * self.periods - self.principal)}")
+    def _get_overpayment(self, total_paid, initial_sum):
+        return int(total_paid - initial_sum)
 
-    def calc_principal(self):
-        p = self.payment / (
-            (self.i * (1 + self.i) ** self.periods) / ((1 + self.i) ** self.periods - 1)
-        )
-        p = math.floor(p)
-        print(f"Your loan principal = {p}!")
-        print(f"Overpayment = {int(self.payment * self.periods - p)}")
+    def solve_annuity(self):
+        # Расчет ежемесячного взноса
+        factor = (1 + self.base_rate) ** self.duration
+        val = self.loan_sum * (self.base_rate * factor) / (factor - 1)
+        val = math.ceil(val)
+        print(f"Ваш ежемесячный аннуитетный платеж составит {val}.")
+        print(f"Переплата по кредиту: {self._get_overpayment(val * self.duration, self.loan_sum)}")
 
-    def calc_periods(self):
-        n = math.log(self.payment / (self.payment - self.i * self.principal), 1 + self.i)
-        n = math.ceil(n)
+    def solve_loan_body(self):
+        # Расчет тела кредита
+        factor = (1 + self.base_rate) ** self.duration
+        val = self.monthly_pay / ((self.base_rate * factor) / (factor - 1))
+        val = math.floor(val)
+        print(f"Основная сумма займа: {val}.")
+        print(f"Переплата по кредиту: {self._get_overpayment(self.monthly_pay * self.duration, val)}")
 
-        years = n // 12
-        months = n % 12
+    def solve_timeframe(self):
+        # Расчет срока погашения
+        log_val = self.monthly_pay / (self.monthly_pay - self.base_rate * self.loan_sum)
+        total_months = math.ceil(math.log(log_val, 1 + self.base_rate))
 
-        parts = []
-        if years > 0:
-            parts.append(f"{years} year" if years == 1 else f"{years} years")
-        if months > 0:
-            parts.append(f"{months} month" if months == 1 else f"{months} months")
+        y, m = divmod(total_months, 12)
+        time_desc = []
+        if y > 0:
+            time_desc.append(f"{y} {'год' if y == 1 else 'года' if 2 <= y <= 4 else 'лет'}")
+        if m > 0:
+            time_desc.append(f"{m} {'месяц' if m == 1 else 'месяца' if 2 <= m <= 4 else 'месяцев'}")
 
-        print(f"It will take {' and '.join(parts)} to repay this loan!")
-        print(f"Overpayment = {int(self.payment * n - self.principal)}")
+        print(f"Срок выплаты составит {' и '.join(time_desc)}.")
+        print(f"Переплата по кредиту: {self._get_overpayment(self.monthly_pay * total_months, self.loan_sum)}")
 
-    def calc_diff(self):
-        total = 0
-        for m in range(1, self.periods + 1):
-            d = self.principal / self.periods + self.i * (
-                self.principal - self.principal * (m - 1) / self.periods
-            )
-            d = math.ceil(d)
-            total += d
-            print(f"Month {m}: payment is {d}")
-        print(f"Overpayment = {int(total - self.principal)}")
+    def solve_differential(self):
+        # Дифференцированные платежи
+        cumulative = 0
+        for month_idx in range(1, self.duration + 1):
+            term = self.loan_sum * (month_idx - 1) / self.duration
+            current_pay = (self.loan_sum / self.duration) + self.base_rate * (self.loan_sum - term)
+            current_pay = math.ceil(current_pay)
+            cumulative += current_pay
+            print(f"Месяц {month_idx}: платеж — {current_pay}")
 
-    def validate(self):
-        params = [self.principal, self.payment, self.periods, self.interest]
-        if any(x is not None and x < 0 for x in params):
+        print(f"Переплата по кредиту: {self._get_overpayment(cumulative, self.loan_sum)}")
+
+    def check_validity(self):
+        # Комплексная проверка входных данных
+        core_params = [self.loan_sum, self.monthly_pay, self.duration, self.rate]
+        if any(p is not None and p < 0 for p in core_params):
             return False
 
-        if self.type == "diff" and self.payment is not None:
+        if self.mode == "diff" and self.monthly_pay is not None:
             return False
 
-        count = sum(x is not None for x in [self.principal, self.payment, self.periods])
-        if count < 2:
+        needed_args = [self.loan_sum, self.monthly_pay, self.duration]
+        if sum(1 for x in needed_args if x is not None) < 2:
             return False
 
         return True
 
-    def run(self):
-        if not self.validate():
-            print("Incorrect parameters")
+    def execute(self):
+        if not self.check_validity():
+            print("Ошибка: параметры указаны неверно.")
             return
 
-        if self.type == "annuity":
-            if self.payment is None:
-                self.calc_annuity_payment()
-            elif self.principal is None:
-                self.calc_principal()
-            elif self.periods is None:
-                self.calc_periods()
-
-        elif self.type == "diff":
-            self.calc_diff()
+        if self.mode == "annuity":
+            if self.monthly_pay is None:
+                self.solve_annuity()
+            elif self.loan_sum is None:
+                self.solve_loan_body()
+            elif self.duration is None:
+                self.solve_timeframe()
+        elif self.mode == "diff":
+            self.solve_differential()
         else:
-            print("Incorrect parameters")
+            print("Ошибка: тип расчета не определен.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    cli_parser = argparse.ArgumentParser(description="Кредитный калькулятор (аналитический модуль)")
 
-    parser.add_argument("--type", choices=["annuity", "diff"])
-    parser.add_argument("--principal", type=float)
-    parser.add_argument("--payment", type=float)
-    parser.add_argument("--periods", type=int)
-    parser.add_argument("--interest", type=float)
+    cli_parser.add_argument("--type", choices=["annuity", "diff"], help="Тип платежей")
+    cli_parser.add_argument("--principal", type=float, help="Сумма кредита")
+    cli_parser.add_argument("--payment", type=float, help="Ежемесячный платеж")
+    cli_parser.add_argument("--periods", type=int, help="Количество месяцев")
+    cli_parser.add_argument("--interest", type=float, help="Годовая процентная ставка")
 
-    args = parser.parse_args()
-
-    calc = CreditCalculator(args)
-    calc.run()
+    user_args = cli_parser.parse_args()
+    engine = FinanceProcessor(user_args)
+    engine.execute()
