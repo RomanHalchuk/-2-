@@ -1,78 +1,82 @@
 import random
 
 
-class ArithmeticTest:
+class MathChallenge:
     def __init__(self):
-        self.levels = {
-            1: "simple operations with numbers 2-9",
-            2: "integral squares of 11-29"
+        self.options = {
+            1: "простые операции с числами от 2 до 9",
+            2: "возведение в квадрат чисел от 11 до 29"
         }
-        self.score = 0
-        self.level = None
+        self.correct_count = 0
+        self.current_lv = None
 
-    def get_level(self):
+    def select_mode(self):
         while True:
-            print("Which level do you want? Enter a number:")
-            print("1 - simple operations with numbers 2-9")
-            print("2 - integral squares of 11-29")
-            try:
-                level = int(input("> "))
-                if level in self.levels:
-                    self.level = level
-                    return
-            except ValueError:
-                pass
-            print("Incorrect format.")
+            print("Выберите уровень сложности:")
+            for k, v in self.options.items():
+                print(f"{k} - {v}")
 
-    def generate_task(self):
-        if self.level == 1:
-            a = random.randint(2, 9)
-            b = random.randint(2, 9)
-            op = random.choice(["+", "-", "*"])
-            expression = f"{a} {op} {b}"
-            return expression, eval(expression)
+            user_input = input("> ").strip()
+            if user_input in ("1", "2"):
+                self.current_lv = int(user_input)
+                break
+            print("Ошибка формата. Введите 1 или 2.")
+
+    def create_question(self):
+        if self.current_lv == 1:
+            val1 = random.randint(2, 9)
+            val2 = random.randint(2, 9)
+            sign = random.choice(["+", "-", "*"])
+            expr = f"{val1} {sign} {val2}"
+            return expr, eval(expr)
         else:
-            n = random.randint(11, 29)
-            return str(n), n * n
+            num = random.randint(11, 29)
+            return str(num), num ** 2
 
-    def get_answer(self):
+    def capture_input(self):
         while True:
             try:
                 return int(input("> "))
             except ValueError:
-                print("Incorrect format.")
+                print("Требуется ввести целое число.")
 
-    def save_result(self):
-        decision = input(
-            "Would you like to save your result to the file? Enter yes or no.\n> "
-        )
-        if decision.lower() in ("yes", "y"):
-            name = input("What is your name?\n> ")
-            with open("results.txt", "a") as file:
-                file.write(
-                    f"{name}: {self.score}/5 in level {self.level} "
-                    f"({self.levels[self.level]}).\n"
-                )
-            print('The results are saved in "results.txt".')
+    def export_data(self):
+        print("Желаете сохранить результат в файл? (yes/no)")
+        answer = input("> ").lower()
+        if answer in ("yes", "y", "да"):
+            username = input("Ваше имя: > ")
+            # Добавляем пустую строку в конце записи, как просил преподаватель
+            with open("results.txt", "a", encoding="utf-8") as out:
+                record = (f"{username}: {self.correct_count}/5 на уровне {self.current_lv} "
+                          f"({self.options[self.current_lv]}).\n")
+                out.write(record)
+            print("Данные записаны в 'results.txt'.")
 
-    def run(self):
-        self.get_level()
+    def start_session(self):
+        while True:
+            self.correct_count = 0
+            self.select_mode()
 
-        for _ in range(5):
-            task, correct_answer = self.generate_task()
-            print(task)
-            user_answer = self.get_answer()
+            for _ in range(5):
+                question, valid_res = self.create_question()
+                print(question)
+                if self.capture_input() == valid_res:
+                    print("Верно!")
+                    self.correct_count += 1
+                else:
+                    print("Ошибка!")
 
-            if user_answer == correct_answer:
-                print("Right!")
-                self.score += 1
-            else:
-                print("Wrong!")
+            print(f"Ваш результат: {self.correct_count}/5.")
+            self.export_data()
 
-        print(f"Your mark is {self.score}/5.")
-        self.save_result()
+            # Исправление: предлагаем продолжить или выбрать другой уровень
+            print("\nХотите попробовать еще раз или выбрать другой уровень? (yes/no)")
+            next_step = input("> ").lower()
+            if next_step not in ("yes", "y", "да"):
+                print("Программа завершена.")
+                break
 
 
 if __name__ == "__main__":
-    test = ArithmeticTest()
-    test.run()
+    app = MathChallenge()
+    app.start_session()
