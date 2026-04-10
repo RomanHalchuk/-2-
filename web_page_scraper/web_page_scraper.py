@@ -1,136 +1,139 @@
 import requests
 from bs4 import BeautifulSoup
-import os
 import string
+from pathlib import Path
 from requests.exceptions import RequestException
 
 
-class NatureScraper:
-    def __init__(self, pages, article_type):
-        self.pages = pages
-        self.article_type = article_type
-        self.base_url = "https://www.nature.com/nature/articles"
-        self.session = requests.Session()
-        self.session.headers.update({
-            "Accept-Language": "en-US,en;q=0.5",
-            "User-Agent": "Mozilla/5.0"
+class DataCollector:
+    def __init__(self, depth, category):
+        self.depth = depth
+        self.category = category
+        self.root_url = "https://www.nature.com/nature/articles"
+        self.worker = requests.Session()
+        # Обновили User-Agent на более детальный
+        self.worker.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept-Language": "en-GB,en;q=0.9"
         })
 
-    def clean_filename(self, title):
-        cleaned = ''.join(char for char in title if char not in string.punctuation)
-        cleaned = cleaned.replace(" ", "_")
-        return cleaned[:150]
+    def _format_name(self, raw_title):
+        """Очистка заголовка для создания имени файла."""
+        valid_chars = f"-_.() {string.ascii_letters}{string.digits}"
+        clean = ''.join(c for c in raw_title if c in valid_chars)
+        return clean.replace(" ", "_").strip()[:120]
 
-    def safe_request(self, url, params=None):
+    def _fetch_page(self, link, query=None):
+        """Безопасное выполнение HTTP-запроса."""
         try:
-            response = self.session.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            return response
-        except RequestException as e:
-            print(f"[ERROR] Request failed: {url} -> {e}")
+            resp = self.worker.get(link, params=query, timeout=15)
+            resp.raise_for_status()
+            return resp
+        except RequestException as err:
+            print(f"--- Сбой при обращении к {link}: {err}")
             return None
 
-    def get_article_content(self, url):
-        response = self.safe_request(url)
-        if not response:
+    def _extract_body(self, full_url):
+        """Поиск текстового содержимого статьи."""
+        resp = self._fetch_page(full_url)
+        if not resp:
             return ""
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        parser = BeautifulSoup(resp.text, "html.parser")
 
-        selectors = [
+        # Список вероятных контейнеров контента
+        containers = [
+            "article.c-article-body",
+            "div.main-content",
             "div[itemprop='articleBody']",
-            "div.c-article-body",
-            "div[data-track-component='article body']"
+            "div.article-item__body"
         ]
 
-        for selector in selectors:
-            body = soup.select_one(selector)
-            if body:
-                paragraphs = body.find_all("p")
-                text = "\n".join(p.get_text(strip=True) for p in paragraphs)
-                if text:
-                    return text
+        for css_selector in containers:
+            element = parser.select_one(css_selector)
+            if element:
+                nodes = element.find_all("p")
+                result_text = "\n".join(node.get_text(strip=True) for node in nodes)
+                if result_text.strip():
+                    return result_text
 
-        teaser = soup.find("p", class_="article__teaser")
-        if teaser:
-            return teaser.get_text(strip=True)
+        # Запасной вариант - краткое описание
+        snippet = parser.find("p", class_="article__teaser")
+        return snippet.get_text(strip=True) if snippet else ""
 
-        print(f"[WARN] No content found: {url}")
-        return ""
+    def _handle_pagination(self, idx):
+        print(f"[*] Анализ страницы №{idx}...")
 
-    def process_page(self, page_number):
-        print(f"[INFO] Processing page {page_number}")
-
-        params = {
+        query_data = {
             "sort": "PubDate",
             "year": "2022",
-            "page": page_number
+            "page": idx
         }
 
-        response = self.safe_request(self.base_url, params=params)
-        if not response:
+        resp = self._fetch_page(self.root_url, query=query_data)
+        if not resp:
             return
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-        folder_name = f"Page_{page_number}"
-        os.makedirs(folder_name, exist_ok=True)
+        # Создание директории через pathlib
+        target_dir = Path(f"Page_{idx}")
+        target_dir.mkdir(exist_ok=True)
 
-        articles = soup.find_all("article")
-        if not articles:
-            print(f"[WARN] No articles found on page {page_number}")
+        items = soup.find_all("article")
+        if not items:
+            print(f"[-] На странице {idx} ничего не найдено.")
             return
 
-        for article in articles:
-            type_tag = article.find("span", {"data-test": "article.type"})
-            if not type_tag:
+        for entry in items:
+            # Проверка типа статьи
+            label = entry.find("span", {"data-test": "article.type"})
+            if not label or label.text.strip() != self.category:
                 continue
 
-            if type_tag.text.strip() != self.article_type:
+            link_node = entry.find("a", {"data-track-action": "view article"})
+            if not link_node:
                 continue
 
-            title_tag = article.find("a", {"data-track-action": "view article"})
-            if not title_tag:
+            article_name = link_node.text.strip()
+            path_suffix = link_node.get("href")
+            full_path = f"https://www.nature.com{path_suffix}"
+
+            print(f"    -> Загрузка: {article_name[:50]}...")
+
+            body_text = self._extract_body(full_path)
+            if not body_text:
                 continue
 
-            title = title_tag.text.strip()
-            article_url = "https://www.nature.com" + title_tag.get("href")
-
-            print(f"[INFO] Fetching: {title}")
-
-            content = self.get_article_content(article_url)
-            if not content:
-                continue
-
-            filename = self.clean_filename(title) + ".txt"
-            file_path = os.path.join(folder_name, filename)
+            file_identity = self._format_name(article_name) + ".txt"
+            final_dest = target_dir / file_identity
 
             try:
-                with open(file_path, "w", encoding="utf-8") as file:
-                    file.write(content)
-            except OSError as e:
-                print(f"[ERROR] File write failed: {file_path} -> {e}")
+                final_dest.write_text(body_text, encoding="utf-8")
+            except Exception as e:
+                print(f"!!! Ошибка записи {file_identity}: {e}")
 
-    def run(self):
-        for page in range(1, self.pages + 1):
-            self.process_page(page)
-
-        print("\nSaved all articles.")
+    def launch(self):
+        for i in range(1, self.depth + 1):
+            self._handle_pagination(i)
+        print("\nПроцесс сбора данных завершен.")
 
 
-def main():
+def start_interactive():
     while True:
         try:
-            pages = int(input("How many pages?\n> "))
-            break
+            p_count = int(input("Введите глубину поиска (кол-во страниц):\n> "))
+            if p_count > 0:
+                break
         except ValueError:
-            print("Enter a valid number!")
+            pass
+        print("Ошибка: введите положительное число.")
 
-    article_type = input("What article type?\n> ")
+    target_type = input("Введите категорию статей (например, Research Highlight):\n> ").strip()
 
-    scraper = NatureScraper(pages, article_type)
-    scraper.run()
+    app = DataCollector(p_count, target_type)
+    app.launch()
 
 
 if __name__ == "__main__":
-    main()
+    start_interactive()
